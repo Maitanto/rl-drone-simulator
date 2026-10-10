@@ -1,93 +1,93 @@
-# Antoni
+# Reinforcement Learning Drone Environment Simulator
+
+## Polytech Grenoble - 4th Year Software Engineering Portfolio
+
+This repository contains a custom-built, pure Python simulation environment modeling an autonomous patrol drone. Designed conceptually around Markov Decision Processes (MDP), this environment provides a formal, object-oriented framework for training and testing Reinforcement Learning (RL) agents or planning algorithms.
+
+The primary objective of the simulated agent is to maximize the coverage of a mathematical grid divided into 4 distinct sectors, all while managing a limited battery supply and actively avoiding dynamically generated danger zones.
+
+## Key Technical Features
+
+* **No External Dependencies:** The engine is written in standard Python and requires no additional modules to run.
+
+
+* **Native Tabular RL Compatibility:** The core `Etat` (State) data structure implements `__eq__` and `__hash__` methods natively, allowing state objects to be used directly as dictionary keys for tabular Q-learning or similar algorithms.
+
+
+* **Model-Based Planning Support:** The environment provides a generative `successeurs(etat: Etat)` function. This deterministic method calculates all legal and possible subsequent states from any given state without altering the current active environment, making it ideal for graph-based exploration and Model-Based RL.
+
+
+* **Customizable Environments:** Upon initialization, the user can configure the X and Y bounds of the grid, as well as a "danger rate" (0 to 100), which dictates the percentage of the map covered by fatal obstacles.
 
 
 
-## Getting started
+## Markov Decision Process (MDP) Formulation
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+The architecture separates the physical rules (handled by classes like `Environnement`, `Zone`, and `Drone`) from the mathematical state.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+### 1. State Space (`Etat`)
 
-## Add your files
+At any timestep $t$, the agent observes a discrete, finite state. The state encapsulates:
 
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+* **Position:** Integer coordinates bounded by the defined grid length and width.
 
-```
-cd existing_repo
-git remote add origin https://gricad-gitlab.univ-grenoble-alpes.fr/mnia/antoni.git
-git branch -M main
-git push -uf origin main
-```
 
-## Integrate with your tools
+* **Resources:** Battery level, represented as an integer strictly between 0 and 100.
 
-* [Set up project integrations](https://gricad-gitlab.univ-grenoble-alpes.fr/mnia/antoni/-/settings/integrations)
 
-## Collaborate with your team
+* **Operational Status:** Boolean flags maintaining physical consistency (`airborne`, `docked`, `crashed`).
 
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
 
-## Test and Deploy
+* **Perception (`obstacle_distance`):** An abstract indicator informing the agent of imminent danger. Transitioning into a danger zone drops this value to 0, signaling a critical/terminal state to the RL wrapper.
 
-Use the built-in continuous integration in GitLab.
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+* **Coverage (`visZones`):** A set tracking the identifiers of successfully explored zones (out of the 4 available) to evaluate patrol performance.
 
-***
 
-# Editing this README
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### 2. Action Space
 
-## Suggestions for a good README
+The agent interacts with the environment using a discrete set of actions, each bound by strict preconditions (e.g., a docked drone cannot move, an empty battery prevents all actions):
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+* `takeoff_cmd`: Launches the drone from the base. Requires battery > 0.
 
-## Name
-Choose a self-explaining name for your project.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+* `move_step`: Moves the drone one tile, bounded by the grid. Consumes 1 battery point.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+* `avoid_maneuver`: A defensive movement prioritizing safety by attempting to transition to a non-danger tile. Consumes 2 battery points.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+* `return_home`: Moves the drone one tile closer to the base located at (0,0). Consumes 1 battery point.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+* `dock_cmd` & `undock_cmd`: Handles attaching and detaching the drone from the base.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+* `charge_step`: Recharges the drone's battery in increments of 5%. Requires the drone to be docked.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+* `emergency_stop`: Forces an immediate crash (terminal state).
 
-## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+
+## Modes of Interaction
+
+The simulator includes three built-in execution modes for testing and validation:
+
+* **Mode 1 (Manual):** Interactive step-by-step piloting via the console, displaying adjacent valid tiles for movement.
+
+
+* **Mode 2 (Automatic Sequence):** Reads a predefined flight plan from a `sequence.csv` file (formatted as semicolon-separated coordinate pairs, e.g., `(1,0);(2,0)`) and executes the trajectory.
+
+
+* **Mode 3 (Exhaustive Exploration):** An analysis tool that uses graph exploration to calculate and display every mathematically reachable state from the initial position. This is highly useful for verifying the size of the state space before initializing an RL training loop.
+
+
+
+## Integrating with an RL Agent (Developer Notes)
+
+* **Reward Function Design:** This codebase is strictly an environment simulator enforcing physical constraints and transitions. It does **not** emit a reward signal natively. The reward function must be entirely designed and encapsulated within your custom RL agent wrapper layer.
+
+
+* **Automating the Loop:** To automate training, bypass the interactive `input()` loop located at the bottom of the script. Instead, instantiate the environment programmatically via your master RL script to handle rapid, non-blocking episodic training.
